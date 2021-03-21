@@ -83,9 +83,11 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
 
   const removeProduct = (productId: number) => {
     try {
+      setCart(cart.filter(product => product.id !== productId))
       // TODO
-    } catch {
+    } catch (error) {
       // TODO
+      console.log(error)
     }
   };
 
@@ -95,8 +97,13 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
   }: UpdateProductAmount) => {
     try {
       // TODO
-    } catch {
+      if (amount < 0) return
+
+      const updatedCart = cart.map(e => e.id === productId ? { ...e, amount } : e)
+      setCart(updatedCart)
+    } catch (error) {
       // TODO
+      console.log(error)
     }
   };
 
