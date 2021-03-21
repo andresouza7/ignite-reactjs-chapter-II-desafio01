@@ -35,46 +35,56 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
     return []
   });
 
-  async function getProductById(productId: number): Promise<Product | void> {
-    return (await api.get<Product>(`/products/${productId}`)).data
-  }
-
   async function checkStockAvailability(productId: number, amount: number): Promise<boolean> {
-    const stockProducts = (await api.get<Stock[]>("/stock")).data
-    const productStock = stockProducts.find(stock => stock.id === productId)
+    const productStock = (await api.get<Stock>(`/stock/${productId}`)).data
 
-    if (!productStock) {
-      return false
-    }
+    const isAvailable = amount <= productStock.amount
+    console.log(isAvailable)
 
-    return productStock.amount >= amount
+    return isAvailable
   }
 
   const addProduct = async (productId: number) => {
     try {
       // TODO
-      const selectedProduct = await getProductById(productId)
+      // Para não lidar com a referencia de memoria errada, eu crio uma variável tempCart e uso ela no find abaixo
+      const tempCart = [...cart];
+      const productAlreadyInCart = tempCart.find(product => product.id === productId);
 
-      if (selectedProduct) {
-        // ** check if product is available
+      //Trouxe o estoque aqui pra cima do if, para validar antes
+      const { data: stock } = await api.get<Stock>(`stock/${productId}`);
 
-        let updatedCart = []
-        const productIncart = cart.find(cartItem => cartItem.id === productId)
-        let amount = productIncart?.amount ?? 1
+      //Pega o valor atual do estoque que queremos, se já tiver em estoque pega o estoque atual, se não tiver, fica como 0
+      const currentAmount = productAlreadyInCart ? productAlreadyInCart.amount : 0;
 
-        if (!productIncart) {
-          updatedCart = [...cart, { ...selectedProduct, amount }]
-        } else {
-          amount++
-          productIncart.amount = amount
-          updatedCart = cart.splice(0)
-        }
+      //Crio uma varíavel com o total final, que vai ser o que vamos adicionar no carrinho:
+      const amount = currentAmount + 1;
 
-        setCart(updatedCart)
-        localStorage.setItem(LOCAL_STORAGE_REF, JSON.stringify(updatedCart))
-      } else {
-        throw new Error()
+      //Valido o estoque
+      if (amount > stock.amount) {
+        toast.error('Quantidade solicitada fora de estoque');
+        return;
       }
+
+      //Se já tiver em estoque, só altera o estoque
+      if (productAlreadyInCart) {
+        productAlreadyInCart.amount = amount;
+      } else {
+        //Se não tiver em estoque, busca o produto e adiciona em carrinho temporário
+        const product = await api.get<Product>(`/products/${productId}`);
+
+        const newProduct = {
+          ...product.data,
+          amount: 1,
+        };
+
+        tempCart.push(newProduct);
+      }
+
+      //Faço o set no estado e crio no localStorage
+      setCart(tempCart);
+      localStorage.setItem('@RocketShoes:cart', JSON.stringify(tempCart));
+
     } catch (error) {
       // TODO
       toast.error("Erro na adição do produto")
@@ -106,17 +116,25 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
   }: UpdateProductAmount) => {
     try {
       // TODO
-      if (amount < 1) return
+      if (amount < 1) {
+        throw new Error("Erro na alteração de quantidade do produto")
+      }
       const productInCart = cart.find(product => product.id === productId)
 
       if (!productInCart) {
         throw new Error("Erro na alteração de quantidade do produto")
       }
 
-      const updatedCart = cart.map(e => e.id === productId ? { ...e, amount } : e)
+      const stockAvailable = await checkStockAvailability(productId, amount)
 
-      setCart(updatedCart)
-      localStorage.setItem(LOCAL_STORAGE_REF, JSON.stringify(updatedCart))
+      if (stockAvailable) {
+        const updatedCart = cart.map(e => e.id === productId ? { ...e, amount } : e)
+
+        setCart(updatedCart)
+        localStorage.setItem(LOCAL_STORAGE_REF, JSON.stringify(updatedCart))
+      } else {
+        throw new Error("Quantidade solicitada fora de estoque")
+      }
     } catch (error) {
       // TODO
       toast.error(error.message)
