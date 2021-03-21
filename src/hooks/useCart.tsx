@@ -4,6 +4,8 @@ import { toast } from 'react-toastify';
 import { api } from '../services/api';
 import { Product, Stock } from '../types';
 
+const LOCAL_STORAGE_REF = "@RocketShoes:cart"
+
 interface CartProviderProps {
   children: ReactNode;
 }
@@ -24,70 +26,77 @@ const CartContext = createContext<CartContextData>({} as CartContextData);
 
 export function CartProvider({ children }: CartProviderProps): JSX.Element {
   const [cart, setCart] = useState<Product[]>(() => {
-    // const storagedCart = Buscar dados do localStorage
+    const storedCart = localStorage.getItem(LOCAL_STORAGE_REF)
 
-    // if (storagedCart) {
-    //   return JSON.parse(storagedCart);
-    // }
-
-    const data: Product[] = JSON.parse(`
-    [
-      {
-      "id": 1,
-      "title": "Tênis de Caminhada Leve Confortável",
-      "price": 179.9,
-      "image": "https://rocketseat-cdn.s3-sa-east-1.amazonaws.com/modulo-redux/tenis1.jpg"
-    },
-    {
-      "id": 2,
-      "title": "Tênis VR Caminhada Confortável Detalhes Couro Masculino",
-      "price": 139.9,
-      "image": "https://rocketseat-cdn.s3-sa-east-1.amazonaws.com/modulo-redux/tenis2.jpg"
-    },
-    {
-      "id": 3,
-      "title": "Tênis Adidas Duramo Lite 2.0",
-      "price": 219.9,
-      "image": "https://rocketseat-cdn.s3-sa-east-1.amazonaws.com/modulo-redux/tenis3.jpg"
+    if (storedCart) {
+      return JSON.parse(storedCart);
     }
-      ]`)
 
-    return data.map(p => {
-      p.amount = 1
-      return p
-    });
+    return []
   });
+
+  async function getProductById(productId: number): Promise<Product | void> {
+    return (await api.get<Product>(`/products/${productId}`)).data
+  }
+
+  async function checkStockAvailability(productId: number, amount: number): Promise<boolean> {
+    const stockProducts = (await api.get<Stock[]>("/stock")).data
+    const productStock = stockProducts.find(stock => stock.id === productId)
+
+    if (!productStock) {
+      return false
+    }
+
+    return productStock.amount >= amount
+  }
 
   const addProduct = async (productId: number) => {
     try {
       // TODO
-      const products = (await api.get<Product[]>("/products")).data
-      const selectedProduct = products.find(product => product.id === productId)
+      const selectedProduct = await getProductById(productId)
 
       if (selectedProduct) {
+        // ** check if product is available
+
+        let updatedCart = []
         const productIncart = cart.find(cartItem => cartItem.id === productId)
+        let amount = productIncart?.amount ?? 1
 
         if (!productIncart) {
-          setCart([...cart, { ...selectedProduct, amount: 1 }])
+          updatedCart = [...cart, { ...selectedProduct, amount }]
         } else {
-          productIncart.amount++
-          const updatedCart = cart.splice(0)
-          setCart(updatedCart)
+          amount++
+          productIncart.amount = amount
+          updatedCart = cart.splice(0)
         }
+
+        setCart(updatedCart)
+        localStorage.setItem(LOCAL_STORAGE_REF, JSON.stringify(updatedCart))
+      } else {
+        throw new Error()
       }
     } catch (error) {
       // TODO
-      console.log(error)
+      toast.error("Erro na adição do produto")
     }
   };
 
   const removeProduct = (productId: number) => {
     try {
-      setCart(cart.filter(product => product.id !== productId))
       // TODO
+      const productInCart = cart.find(product => product.id === productId)
+
+      if (!productInCart) {
+        throw new Error("Erro na remoção do produto")
+      }
+
+      const updatedCart = cart.filter(product => product.id !== productId)
+
+      setCart(updatedCart)
+      localStorage.setItem(LOCAL_STORAGE_REF, JSON.stringify(updatedCart))
     } catch (error) {
       // TODO
-      console.log(error)
+      toast.error(error.message)
     }
   };
 
@@ -97,13 +106,20 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
   }: UpdateProductAmount) => {
     try {
       // TODO
-      if (amount < 0) return
+      if (amount < 1) return
+      const productInCart = cart.find(product => product.id === productId)
+
+      if (!productInCart) {
+        throw new Error("Erro na alteração de quantidade do produto")
+      }
 
       const updatedCart = cart.map(e => e.id === productId ? { ...e, amount } : e)
+
       setCart(updatedCart)
+      localStorage.setItem(LOCAL_STORAGE_REF, JSON.stringify(updatedCart))
     } catch (error) {
       // TODO
-      console.log(error)
+      toast.error(error.message)
     }
   };
 

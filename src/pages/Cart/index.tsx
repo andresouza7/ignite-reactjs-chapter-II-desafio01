@@ -70,7 +70,7 @@ const Cart = (): JSX.Element => {
         </thead>
         <tbody>
           {cartFormatted.map(product =>
-            <tr key={Math.random().toString()} data-testid="product">
+            <tr key={product.id} data-testid="product">
               <td>
                 <img src={product.image} alt={product.title} />
               </td>
@@ -110,7 +110,7 @@ const Cart = (): JSX.Element => {
                 <button
                   type="button"
                   data-testid="remove-product"
-                onClick={() => handleRemoveProduct(product.id)}
+                  onClick={() => handleRemoveProduct(product.id)}
                 >
                   <MdDelete size={20} />
                 </button>
